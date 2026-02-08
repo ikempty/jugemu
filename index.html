@@ -250,17 +250,10 @@
   }
   .flick-wrap{
     margin-top:10px;
-    background:rgba(255,255,255,.46);
-    border:1px solid rgba(255,255,255,.55);
-    border-radius:14px;
-    padding:12px;
-    box-shadow:0 8px 20px rgba(0,0,0,.08);
+    padding:6px 0 0;
   }
   .flick-note{
-    font-size:12px;
-    font-weight:800;
-    color:#0f172a;
-    margin-bottom:6px;
+    display:none;
   }
   .flick-grid{
     display:grid;
@@ -464,7 +457,6 @@
       </div>
       <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="" autofocus />
       <div id="flickArea" class="flick-wrap hidden">
-        <div class="flick-note">スマホ向けフリック風キーボード</div>
         <div id="flickGrid" class="flick-grid"></div>
       </div>
     </div>
@@ -1193,15 +1185,18 @@
 
   flickGrid.addEventListener("touchstart", (e) => {
     const t = e.changedTouches[0];
-    const keyIdx = getKeyIdx(e.target);
-    if (keyIdx === null) return;
+    const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
+    if (!btn) return;
+    const keyIdx = Number(btn.dataset.key);
     handlePressStart(t.clientX, t.clientY, keyIdx);
-  }, {passive:true});
+    e.preventDefault();
+  }, {passive:false});
 
   flickGrid.addEventListener("touchend", (e) => {
     const t = e.changedTouches[0];
-    const keyIdx = getKeyIdx(e.target);
-    if (keyIdx === null) { pressInfo=null; return; }
+    const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
+    if (!btn) { pressInfo=null; return; }
+    const keyIdx = Number(btn.dataset.key);
     handlePressEnd(t.clientX, t.clientY, keyIdx);
     e.preventDefault();
   }, {passive:false});
