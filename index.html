@@ -757,11 +757,19 @@
 
   function renderHint(key, dir, x, y){
     if (!key) return;
-    hintLeft.textContent = key.left || "";
-    hintUp.textContent = key.up || "";
-    hintRight.textContent = key.right || "";
-    hintDown.textContent = key.down || "";
-    hintCenter.textContent = key.base || key.label || "";
+    if (key.action === "cycle"){
+      hintLeft.textContent = "゛";
+      hintUp.textContent = "゛";
+      hintRight.textContent = "゜";
+      hintDown.textContent = "小";
+      hintCenter.textContent = "゛";
+    } else {
+      hintLeft.textContent = key.left || "";
+      hintUp.textContent = key.up || "";
+      hintRight.textContent = key.right || "";
+      hintDown.textContent = key.down || "";
+      hintCenter.textContent = key.base || key.label || "";
+    }
 
     [hintLeft, hintUp, hintRight, hintDown, hintCenter].forEach(h => h.classList.remove("active"));
     if (dir === "left") hintLeft.classList.add("active");
@@ -1008,7 +1016,23 @@
     handleChars(ch);
   }
 
-  function decideChar(key, dir){
+  function previewFlickChar(key, dir){
+    if (!key) return null;
+    if (key.action === "cycle"){
+      if (dir === "right") return "゜";
+      if (dir === "down") return "小";
+      return "゛";
+    }
+    if (!key.base) return null;
+    if (!dir) return key.base;
+    if (dir === "left" && key.left) return key.left;
+    if (dir === "up" && key.up) return key.up;
+    if (dir === "right" && key.right) return key.right;
+    if (dir === "down" && key.down) return key.down;
+    return key.base;
+  }
+
+  function commitFlick(key, dir){
     if (key.action === "cycle"){
       if (!dir || dir === "left"){
         pendingDakuten = true;
@@ -1025,13 +1049,20 @@
       }
       return null;
     }
-    if (!key.base) return null;
-    if (!dir) return key.base;
-    if (dir === "left" && key.left) return key.left;
-    if (dir === "up" && key.up) return key.up;
-    if (dir === "right" && key.right) return key.right;
-    if (dir === "down" && key.down) return key.down;
-    return key.base;
+    return previewFlickChar(key, dir);
+  }
+
+  function getFlickDirection(startX, startY, endX, endY){
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const threshold = 14;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold){
+      return dx > 0 ? "right" : "left";
+    }
+    if (Math.abs(dy) > threshold){
+      return dy > 0 ? "down" : "up";
+    }
+    return null;
   }
 
   function convertRomajiBuffer(flush){
@@ -1264,36 +1295,21 @@
   });
 
   function handlePressStart(clientX, clientY, keyIdx){
-    pressInfo = {x:clientX, y:clientY, keyIdx};
+    pressInfo = {x:clientX, y:clientY, keyIdx, pointerId:null, touchId:null};
     const key = FLICK_KEYS[keyIdx];
-    const ch = decideChar(key, null);
+    const ch = previewFlickChar(key, null);
     showPreview(ch, clientX, clientY);
     renderHint(key, null, clientX, clientY);
   }
 
-  function handlePressEnd(clientX, clientY, keyIdx){
-    if (pressInfo && pressInfo.keyIdx !== keyIdx){
-      pressInfo = null;
-      hidePreview();
-      hideHint();
-      return;
-    }
+  function handlePressEnd(clientX, clientY, fallbackKeyIdx){
     const info = pressInfo;
     pressInfo = null;
+    const keyIdx = info ? info.keyIdx : fallbackKeyIdx;
     const key = FLICK_KEYS[keyIdx];
     if (!key) return;
-    let dir = null;
-    if (info){
-      const dx = clientX - info.x;
-      const dy = clientY - info.y;
-      const threshold = 22;
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold){
-        dir = dx > 0 ? "right" : "left";
-      } else if (Math.abs(dy) > threshold){
-        dir = dy > 0 ? "down" : "up";
-      }
-    }
-    const ch = decideChar(key, dir);
+    const dir = info ? getFlickDirection(info.x, info.y, clientX, clientY) : null;
+    const ch = commitFlick(key, dir);
     hidePreview();
     hideHint();
     if (ch) emitFlickChar(ch);
@@ -1301,17 +1317,9 @@
 
   function handlePressMove(clientX, clientY){
     if (!pressInfo) return;
-    const dx = clientX - pressInfo.x;
-    const dy = clientY - pressInfo.y;
-    const threshold = 22;
-    let dir = null;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold){
-      dir = dx > 0 ? "right" : "left";
-    } else if (Math.abs(dy) > threshold){
-      dir = dy > 0 ? "down" : "up";
-    }
+    const dir = getFlickDirection(pressInfo.x, pressInfo.y, clientX, clientY);
     const key = FLICK_KEYS[pressInfo.keyIdx];
-    const ch = decideChar(key, dir);
+    const ch = previewFlickChar(key, dir);
     showPreview(ch, clientX, clientY);
     renderHint(key, dir, clientX, clientY);
   }
@@ -1328,21 +1336,21 @@
     if (!btn) return;
     const keyIdx = Number(btn.dataset.key);
     handlePressStart(t.clientX, t.clientY, keyIdx);
+    if (pressInfo) pressInfo.touchId = t.identifier;
     e.preventDefault();
   }, {passive:false});
 
   flickGrid.addEventListener("touchmove", (e) => {
-    const t = e.changedTouches[0];
+    const t = Array.from(e.changedTouches).find(v => !pressInfo || pressInfo.touchId === null || v.identifier === pressInfo.touchId);
+    if (!t) return;
     handlePressMove(t.clientX, t.clientY);
     e.preventDefault();
   }, {passive:false});
 
   flickGrid.addEventListener("touchend", (e) => {
-    const t = e.changedTouches[0];
-    const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
-    if (!btn) { pressInfo=null; hidePreview(); hideHint(); return; }
-    const keyIdx = Number(btn.dataset.key);
-    handlePressEnd(t.clientX, t.clientY, keyIdx);
+    const t = Array.from(e.changedTouches).find(v => !pressInfo || pressInfo.touchId === null || v.identifier === pressInfo.touchId);
+    if (!t || !pressInfo) { pressInfo=null; hidePreview(); hideHint(); return; }
+    handlePressEnd(t.clientX, t.clientY, pressInfo.keyIdx);
     e.preventDefault();
   }, {passive:false});
 
@@ -1351,32 +1359,35 @@
     const keyIdx = getKeyIdx(e.target);
     if (keyIdx === null) return;
     handlePressStart(e.clientX, e.clientY, keyIdx);
+    if (pressInfo) pressInfo.pointerId = e.pointerId;
   });
 
-  flickGrid.addEventListener("pointermove", (e) => {
+  window.addEventListener("pointermove", (e) => {
     if (e.pointerType === "touch") return;
+    if (!pressInfo || (pressInfo.pointerId !== null && pressInfo.pointerId !== e.pointerId)) return;
     handlePressMove(e.clientX, e.clientY);
   });
 
-  flickGrid.addEventListener("pointerup", (e) => {
+  window.addEventListener("pointerup", (e) => {
     if (e.pointerType === "touch") return;
-    const keyIdx = getKeyIdx(e.target);
-    if (keyIdx === null) return;
-    handlePressEnd(e.clientX, e.clientY, keyIdx);
+    if (!pressInfo || (pressInfo.pointerId !== null && pressInfo.pointerId !== e.pointerId)) return;
+    handlePressEnd(e.clientX, e.clientY, pressInfo.keyIdx);
   });
 
   flickGrid.addEventListener("click", (e) => {
+    if (!usePCRealtime) return;
     const keyIdx = getKeyIdx(e.target);
     if (keyIdx === null) return;
     if (pressInfo) return;
     const key = FLICK_KEYS[keyIdx];
-    const ch = decideChar(key, null);
+    const ch = commitFlick(key, null);
     if (ch) emitFlickChar(ch);
   });
 
   ["touchcancel","pointercancel","touchleave","mouseleave"].forEach(ev=>{
     flickGrid.addEventListener(ev, () => { pressInfo=null; hidePreview(); hideHint(); });
   });
+  window.addEventListener("pointercancel", () => { pressInfo=null; hidePreview(); hideHint(); });
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && phase === "play") {
