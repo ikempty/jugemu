@@ -586,7 +586,8 @@
   lenEl.textContent = TEXT.length.toString();
   const isMobileLike = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isCoarsePointer = window.matchMedia("(pointer:coarse)").matches;
-  usePCRealtime = !(isMobileLike || isCoarsePointer);
+  const isTouchCapable = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  usePCRealtime = !(isMobileLike || isCoarsePointer || isTouchCapable);
 
   const FLICK_KEYS = [
     {label:"あ", base:"あ", left:"い", up:"う", right:"え", down:"お"},
@@ -598,11 +599,9 @@
     {label:"ま", base:"ま", left:"み", up:"む", right:"め", down:"も"},
     {label:"や", base:"や", left:"ゃ", up:"ゆ", right:"よ", down:"ゅ"},
     {label:"ら", base:"ら", left:"り", up:"る", right:"れ", down:"ろ"},
-    {label:"小", action:"small"},
-    {label:"゛", action:"dakuten"},
-    {label:"゜", action:"handaku"},
+    {label:"゛", action:"cycle"}, // left/center: dakuten, right: handaku, down: small
     {label:"わ", base:"わ", left:"を", up:"ん", right:"ー", down:"ゎ"},
-    {label:"、", base:"、", left:"。", up:"？", right:"！", down:"・"}
+    {label:"？", base:"、", left:"。", up:"？", right:"！", down:"・"}
   ];
   let pressInfo = null;
   let pendingSmall = false;
@@ -899,20 +898,20 @@
   }
 
   function decideChar(key, dir){
-    if (key.action === "small"){
-      pendingSmall = true;
-      pendingDakuten = false;
-      pendingHandaku = false;
-      return null;
-    }
-    if (key.action === "dakuten"){
-      pendingDakuten = true;
-      pendingHandaku = false;
-      return null;
-    }
-    if (key.action === "handaku"){
-      pendingHandaku = true;
-      pendingDakuten = false;
+    if (key.action === "cycle"){
+      if (!dir || dir === "left"){
+        pendingDakuten = true;
+        pendingHandaku = false;
+        pendingSmall = false;
+      } else if (dir === "right"){
+        pendingHandaku = true;
+        pendingDakuten = false;
+        pendingSmall = false;
+      } else if (dir === "down"){
+        pendingSmall = true;
+        pendingDakuten = false;
+        pendingHandaku = false;
+      }
       return null;
     }
     if (!key.base) return null;
