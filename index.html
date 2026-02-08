@@ -260,6 +260,23 @@
     grid-template-columns:repeat(3,1fr);
     gap:6px;
   }
+  .flick-preview{
+    position:fixed;
+    min-width:72px;
+    min-height:72px;
+    padding:14px 16px;
+    background:rgba(255,255,255,.96);
+    border-radius:14px;
+    box-shadow:0 14px 24px rgba(0,0,0,.18);
+    font-size:38px;
+    font-weight:900;
+    color:#0f172a;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:80;
+    pointer-events:none;
+  }
   .flick-btn{
     border:none;
     border-radius:10px;
@@ -458,6 +475,7 @@
       <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="" autofocus />
       <div id="flickArea" class="flick-wrap hidden">
         <div id="flickGrid" class="flick-grid"></div>
+        <div id="flickPreview" class="flick-preview hidden"></div>
       </div>
     </div>
   </section>
@@ -555,6 +573,7 @@
   const progressBarEl = el("progressBar");
   const flickArea = el("flickArea");
   const flickGrid = el("flickGrid");
+  const flickPreview = el("flickPreview");
 
   const finalScoreEl = el("finalScore");
   const timeRawEl = el("timeRaw");
@@ -599,6 +618,7 @@
   let pendingSmall = false;
   let pendingDakuten = false;
   let pendingHandaku = false;
+  let previewVisible = false;
 
   function syncInputMode(){
     if (usePCRealtime) {
@@ -665,6 +685,22 @@
     progressPctEl.textContent = (ratio * 100).toFixed(1);
     progressBarEl.style.width = `${(ratio * 100).toFixed(1)}%`;
     nextCharEl.textContent = pos < TEXT.length ? TEXT[pos] : "完了";
+  }
+
+  function showPreview(ch, x, y){
+    flickPreview.textContent = ch || "";
+    flickPreview.classList.toggle("hidden", !ch);
+    previewVisible = !!ch;
+    if (ch){
+      const offset = 70;
+      flickPreview.style.transform = `translate(${x - offset}px, ${y - offset}px)`;
+    }
+  }
+
+  function hidePreview(){
+    if (!previewVisible) return;
+    previewVisible = false;
+    flickPreview.classList.add("hidden");
   }
 
   function renderFlickKeyboard(){
@@ -1151,11 +1187,15 @@
 
   function handlePressStart(clientX, clientY, keyIdx){
     pressInfo = {x:clientX, y:clientY, keyIdx};
+    const key = FLICK_KEYS[keyIdx];
+    const ch = decideChar(key, null);
+    showPreview(ch, clientX, clientY);
   }
 
   function handlePressEnd(clientX, clientY, keyIdx){
     if (pressInfo && pressInfo.keyIdx !== keyIdx){
       pressInfo = null;
+      hidePreview();
       return;
     }
     const info = pressInfo;
@@ -1174,7 +1214,24 @@
       }
     }
     const ch = decideChar(key, dir);
+    hidePreview();
     if (ch) emitFlickChar(ch);
+  }
+
+  function handlePressMove(clientX, clientY){
+    if (!pressInfo) return;
+    const dx = clientX - pressInfo.x;
+    const dy = clientY - pressInfo.y;
+    const threshold = 22;
+    let dir = null;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold){
+      dir = dx > 0 ? "right" : "left";
+    } else if (Math.abs(dy) > threshold){
+      dir = dy > 0 ? "down" : "up";
+    }
+    const key = FLICK_KEYS[pressInfo.keyIdx];
+    const ch = decideChar(key, dir);
+    showPreview(ch, clientX, clientY);
   }
 
   const getKeyIdx = (target) => {
@@ -1192,6 +1249,12 @@
     e.preventDefault();
   }, {passive:false});
 
+  flickGrid.addEventListener("touchmove", (e) => {
+    const t = e.changedTouches[0];
+    handlePressMove(t.clientX, t.clientY);
+    e.preventDefault();
+  }, {passive:false});
+
   flickGrid.addEventListener("touchend", (e) => {
     const t = e.changedTouches[0];
     const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
@@ -1206,6 +1269,11 @@
     const keyIdx = getKeyIdx(e.target);
     if (keyIdx === null) return;
     handlePressStart(e.clientX, e.clientY, keyIdx);
+  });
+
+  flickGrid.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") return;
+    handlePressMove(e.clientX, e.clientY);
   });
 
   flickGrid.addEventListener("pointerup", (e) => {
