@@ -166,15 +166,18 @@
     color:#334155;
   }
   .start-row{
-    align-items:center;
+    flex-direction:column;
+    align-items:flex-start;
     gap:10px;
   }
   .start-row .input{
-    flex:0 1 190px;
-    max-width:190px;
+    width:100%;
+    max-width:220px;
   }
   .start-row .btn{
     height:42px;
+    width:100%;
+    max-width:220px;
   }
   .progress-track{
     margin-top:10px;
@@ -516,7 +519,8 @@
 
   lenEl.textContent = TEXT.length.toString();
   const isMobileLike = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  usePCRealtime = !isMobileLike;
+  const isCoarsePointer = window.matchMedia("(pointer:coarse)").matches;
+  usePCRealtime = !(isMobileLike || isCoarsePointer);
 
   function syncInputMode(){
     if (usePCRealtime) {
@@ -638,14 +642,10 @@
     typeInput.readOnly = false;
     typeInput.setAttribute("inputmode", "text");
     syncInputMode();
-    if (usePCRealtime) {
-      playWarn.classList.add("hidden");
-      return;
-    }
-    playWarn.textContent = "下の入力欄をタップして入力開始";
-    playWarn.classList.remove("hidden");
+    playWarn.classList.add("hidden");
     typeInput.value = "";
     mobileHandledLen = 0;
+    focusTypingInput();
   }
 
   function focusTypingInput(){
@@ -943,7 +943,7 @@
 
   typeInput.addEventListener("blur", () => {
     if (phase !== "play") return;
-    playWarn.textContent = "入力が外れました。入力欄をタップして再開してください。";
+    playWarn.textContent = "入力が外れました。画面をタップして再開してください。";
     playWarn.classList.remove("hidden");
   });
 
