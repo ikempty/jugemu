@@ -86,19 +86,16 @@
     z-index:1;
   }
   h1{
-    margin:0 0 12px;
-    font-size:34px;
-    letter-spacing:.04em;
-    font-weight:900;
-    color:#fff8ef;
-    text-shadow:0 4px 12px rgba(45,12,29,.35);
+    display:none;
   }
   .logo{
-    width:180px;
-    max-width:70%;
+    width:100%;
+    max-width:100%;
+    height:auto;
     display:block;
-    margin:0 auto 10px;
-    filter:drop-shadow(0 8px 16px rgba(0,0,0,.26));
+    margin:0 auto 6px;
+    filter:drop-shadow(0 10px 18px rgba(0,0,0,.28));
+    border-radius:12px;
   }
   .muted{color:var(--muted)}
   .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
@@ -284,6 +281,40 @@
     z-index:80;
     pointer-events:none;
   }
+  .flick-hint{
+    position:fixed;
+    background:rgba(18,27,38,0.9);
+    color:#f8fafc;
+    border-radius:12px;
+    padding:8px 10px;
+    font-size:15px;
+    font-weight:800;
+    box-shadow:0 12px 20px rgba(0,0,0,.25);
+    z-index:79;
+    pointer-events:none;
+    display:grid;
+    gap:4px;
+  }
+  .flick-hint.hidden{display:none;}
+  .hint-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .hint-dir{
+    width:16px;
+    text-align:center;
+    opacity:.8;
+  }
+  .hint-char{
+    padding:2px 6px;
+    border-radius:8px;
+    background:rgba(255,255,255,.1);
+  }
+  .hint-char.active{
+    background:#22d3ee;
+    color:#0b1728;
+  }
   .flick-btn{
     border:none;
     border-radius:10px;
@@ -445,7 +476,6 @@
 <div class="app">
   <section id="screen-start" class="screen active">
     <img src="logo.jpg" alt="寿限無タイピング" class="logo" onerror="this.style.display='none';" />
-    <h1>寿限無タイピング</h1>
     <div class="card">
       <div class="row start-row">
         <input id="name" class="input" maxlength="12" placeholder="なまえ" aria-label="なまえ" />
@@ -484,6 +514,13 @@
       <div id="flickArea" class="flick-wrap hidden">
         <div id="flickGrid" class="flick-grid"></div>
         <div id="flickPreview" class="flick-preview hidden"></div>
+        <div id="flickHint" class="flick-hint hidden">
+          <div class="hint-row"><span class="hint-dir">◀</span><span id="hintLeft" class="hint-char"></span></div>
+          <div class="hint-row"><span class="hint-dir">▲</span><span id="hintUp" class="hint-char"></span></div>
+          <div class="hint-row"><span class="hint-dir">▶</span><span id="hintRight" class="hint-char"></span></div>
+          <div class="hint-row"><span class="hint-dir">▼</span><span id="hintDown" class="hint-char"></span></div>
+          <div class="hint-row"><span class="hint-dir">●</span><span id="hintCenter" class="hint-char"></span></div>
+        </div>
       </div>
     </div>
   </section>
@@ -582,6 +619,12 @@
   const flickArea = el("flickArea");
   const flickGrid = el("flickGrid");
   const flickPreview = el("flickPreview");
+  const flickHint = el("flickHint");
+  const hintLeft = el("hintLeft");
+  const hintUp = el("hintUp");
+  const hintRight = el("hintRight");
+  const hintDown = el("hintDown");
+  const hintCenter = el("hintCenter");
 
   const finalScoreEl = el("finalScore");
   const timeRawEl = el("timeRaw");
@@ -627,6 +670,7 @@
   let pendingDakuten = false;
   let pendingHandaku = false;
   let previewVisible = false;
+  let hintVisible = false;
 
   function syncInputMode(){
     if (usePCRealtime) {
@@ -709,6 +753,32 @@
     if (!previewVisible) return;
     previewVisible = false;
     flickPreview.classList.add("hidden");
+  }
+
+  function renderHint(key, dir, x, y){
+    if (!key) return;
+    hintLeft.textContent = key.left || "";
+    hintUp.textContent = key.up || "";
+    hintRight.textContent = key.right || "";
+    hintDown.textContent = key.down || "";
+    hintCenter.textContent = key.base || key.label || "";
+
+    [hintLeft, hintUp, hintRight, hintDown, hintCenter].forEach(h => h.classList.remove("active"));
+    if (dir === "left") hintLeft.classList.add("active");
+    else if (dir === "up") hintUp.classList.add("active");
+    else if (dir === "right") hintRight.classList.add("active");
+    else if (dir === "down") hintDown.classList.add("active");
+    else hintCenter.classList.add("active");
+
+    flickHint.style.transform = `translate(${x + 16}px, ${y - 10}px)`;
+    flickHint.classList.remove("hidden");
+    hintVisible = true;
+  }
+
+  function hideHint(){
+    if (!hintVisible) return;
+    hintVisible = false;
+    flickHint.classList.add("hidden");
   }
 
   function renderFlickKeyboard(){
@@ -1198,12 +1268,14 @@
     const key = FLICK_KEYS[keyIdx];
     const ch = decideChar(key, null);
     showPreview(ch, clientX, clientY);
+    renderHint(key, null, clientX, clientY);
   }
 
   function handlePressEnd(clientX, clientY, keyIdx){
     if (pressInfo && pressInfo.keyIdx !== keyIdx){
       pressInfo = null;
       hidePreview();
+      hideHint();
       return;
     }
     const info = pressInfo;
@@ -1223,6 +1295,7 @@
     }
     const ch = decideChar(key, dir);
     hidePreview();
+    hideHint();
     if (ch) emitFlickChar(ch);
   }
 
@@ -1240,6 +1313,7 @@
     const key = FLICK_KEYS[pressInfo.keyIdx];
     const ch = decideChar(key, dir);
     showPreview(ch, clientX, clientY);
+    renderHint(key, dir, clientX, clientY);
   }
 
   const getKeyIdx = (target) => {
@@ -1266,7 +1340,7 @@
   flickGrid.addEventListener("touchend", (e) => {
     const t = e.changedTouches[0];
     const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
-    if (!btn) { pressInfo=null; return; }
+    if (!btn) { pressInfo=null; hidePreview(); hideHint(); return; }
     const keyIdx = Number(btn.dataset.key);
     handlePressEnd(t.clientX, t.clientY, keyIdx);
     e.preventDefault();
@@ -1298,6 +1372,10 @@
     const key = FLICK_KEYS[keyIdx];
     const ch = decideChar(key, null);
     if (ch) emitFlickChar(ch);
+  });
+
+  ["touchcancel","pointercancel","touchleave","mouseleave"].forEach(ev=>{
+    flickGrid.addEventListener(ev, () => { pressInfo=null; hidePreview(); hideHint(); });
   });
 
   document.addEventListener("visibilitychange", () => {
