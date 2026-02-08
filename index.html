@@ -110,9 +110,9 @@
   .screen{display:none}
   .screen.active{display:block}
   .input{
-    font-size:18px; padding:12px 14px; border-radius:12px;
+    font-size:16px; padding:10px 12px; border-radius:12px;
     border:2px solid rgba(255,127,0,.4);
-    width:260px;
+    width:220px;
     background:rgba(255,255,255,.62);
   }
   .input:focus{
@@ -164,11 +164,11 @@
     gap:10px;
   }
   .start-row .input{
-    flex:1 1 220px;
-    max-width:320px;
+    flex:0 1 220px;
+    max-width:220px;
   }
   .start-row .btn{
-    height:48px;
+    height:42px;
   }
   .progress-track{
     margin-top:10px;
@@ -416,6 +416,10 @@
 (() => {
   const TEXT = "じゅげむじゅげむごこうのすりきれかいじゃりすいぎょのすいぎょうまつうんらいまつふうらいまつくうねるところにすむところやぶらこうじのぶらこうじぱいぽぱいぽぱいぽのしゅーりんがんしゅーりんがんのぐーりんだいぐーりんだいのぽんぽこぴーのぽんぽこなのちょうきゅうめいのちょうすけ";
   const KANJI_TEXT = "寿限無寿限無五劫の擦り切れ海砂利水魚の水行末雲来末風来末食う寝る処に住む処藪ら柑子の藪柑子パイポパイポパイポのシューリンガンシューリンガンのグーリンダイグーリンダイのポンポコピーのポンポコナーの長久命の長助";
+  const SMALL_EQUIV = {
+    "ぁ":"あ","ぃ":"い","ぅ":"う","ぇ":"え","ぉ":"お",
+    "ゃ":"や","ゅ":"ゆ","ょ":"よ","ゎ":"わ","っ":"つ"
+  };
   const ROMAJI_TO_KANA = {
     a:"あ",i:"い",u:"う",e:"え",o:"お",
     ka:"か",ki:"き",ku:"く",ke:"け",ko:"こ",
@@ -498,6 +502,7 @@
   let romajiBuffer = "";
   let usePCRealtime = false;
   let lastRealtimeKeyHandledAt = -1;
+  let mobileHandledLen = 0;
 
   lenEl.textContent = TEXT.length.toString();
   const isMobileLike = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -581,6 +586,7 @@
     lastCompositionHandledAt = -1;
     romajiBuffer = "";
     lastRealtimeKeyHandledAt = -1;
+    mobileHandledLen = 0;
   }
 
   function startCountdown(){
@@ -628,6 +634,8 @@
     }
     playWarn.textContent = "下の入力欄をタップして入力開始";
     playWarn.classList.remove("hidden");
+    typeInput.value = "";
+    mobileHandledLen = 0;
   }
 
   function focusTypingInput(){
@@ -657,10 +665,15 @@
     return /[ぁ-ゖー]/.test(ch);
   }
 
+  function isKanaMatch(inputChar, expectedChar){
+    if (inputChar === expectedChar) return true;
+    return SMALL_EQUIV[expectedChar] === inputChar;
+  }
+
   function handleChars(str){
     for (const ch of str){
       if (!isHiraganaOrLong(ch)) continue;
-      if (ch === TEXT[pos]){
+      if (isKanaMatch(ch, TEXT[pos])){
         pos += 1;
         posEl.textContent = pos.toString();
         if (pos >= TEXT.length){
@@ -716,6 +729,22 @@
 
     if (kanaOut){
       handleChars(kanaOut);
+    }
+  }
+
+  function processMobileDelta(){
+    const normalized = (typeInput.value || "").normalize("NFC");
+    if (normalized.length < mobileHandledLen) {
+      mobileHandledLen = normalized.length;
+      return;
+    }
+    const delta = normalized.slice(mobileHandledLen);
+    if (!delta) return;
+    processCommittedText(delta);
+    mobileHandledLen = normalized.length;
+    if (mobileHandledLen > 24) {
+      typeInput.value = "";
+      mobileHandledLen = 0;
     }
   }
 
@@ -829,6 +858,9 @@
       e.preventDefault();
       return;
     }
+    if (!usePCRealtime && e.inputType === "insertLineBreak") {
+      e.preventDefault();
+    }
   });
 
   document.addEventListener("keydown", (e) => {
@@ -877,11 +909,18 @@
       return;
     }
     if (lastCompositionHandledAt > 0 && performance.now() - lastCompositionHandledAt < 40) {
-      typeInput.value = "";
+      if (usePCRealtime) {
+        typeInput.value = "";
+      }
       return;
     }
     if (lastRealtimeKeyHandledAt > 0 && performance.now() - lastRealtimeKeyHandledAt < 40) {
       typeInput.value = "";
+      return;
+    }
+    if (!usePCRealtime) {
+      if (isComposing || e.isComposing) return;
+      processMobileDelta();
       return;
     }
     if (isComposing || e.isComposing) return;
@@ -906,10 +945,14 @@
       return;
     }
     isComposing = false;
-    const committed = e.data || typeInput.value || "";
-    processCommittedText(committed);
+    if (!usePCRealtime) {
+      processMobileDelta();
+    } else {
+      const committed = e.data || typeInput.value || "";
+      processCommittedText(committed);
+      typeInput.value = "";
+    }
     lastCompositionHandledAt = performance.now();
-    typeInput.value = "";
   });
 
   typeInput.addEventListener("paste", (e) => {
