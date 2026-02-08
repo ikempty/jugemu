@@ -405,7 +405,7 @@
         <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
         <div id="playWarn" class="warn hidden"></div>
       </div>
-      <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="" />
+      <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="" autofocus />
     </div>
   </section>
 
@@ -518,6 +518,7 @@
   let romajiBuffer = "";
   let usePCRealtime = false;
   let lastRealtimeKeyHandledAt = -1;
+  let mobileHandledLen = 0;
 
   lenEl.textContent = TEXT.length.toString();
   const isMobileLike = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -844,6 +845,7 @@
   el("startBtn").addEventListener("click", () => {
     startWarn.classList.add("hidden");
     startCountdown();
+    setTimeout(() => focusTypingInput(), 30);
   });
 
   el("retryBtn").addEventListener("click", () => {
@@ -863,7 +865,6 @@
     if (!usePCRealtime && e.inputType === "insertLineBreak") {
       e.preventDefault();
       typeInput.value = "";
-      mobileHandledLen = 0;
     }
   });
 
@@ -920,7 +921,6 @@
       }
     }
     if (!usePCRealtime) {
-      if (isComposing || e.isComposing) return;
       processMobileDelta();
       return;
     }
@@ -947,7 +947,7 @@
     }
     isComposing = false;
     if (!usePCRealtime) {
-      processMobileDelta();
+      if (typeInput.value) processMobileDelta();
     } else {
       const committed = e.data || typeInput.value || "";
       processCommittedText(committed);
