@@ -187,16 +187,35 @@
   .countdown{
     font-size:48px; font-weight:800; text-align:center; margin:10px 0;
   }
-  .ime-hidden-input{
+  .ime-input{
+    width:100%;
+    margin-top:8px;
+    padding:12px 14px;
+    border-radius:12px;
+    border:2px solid rgba(3,115,138,.35);
+    background:rgba(255,255,255,.74);
+    color:#1f2937;
+    font-size:18px;
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+  .ime-input:focus{
+    outline:none;
+    border-color:var(--accent2);
+    box-shadow:0 0 0 4px rgba(3,115,138,.14);
+  }
+  .ime-input.desktop-hidden{
     position:fixed;
-    left:12px;
-    bottom:12px;
+    left:-9999px;
+    bottom:0;
     width:1px;
     height:1px;
     opacity:0;
     pointer-events:none;
     border:none;
     background:transparent;
+    margin:0;
+    padding:0;
   }
   .warn{
     color:#b45309;
@@ -288,6 +307,9 @@
       min-width:0;
       padding:6px 8px;
     }
+    .ime-input{
+      font-size:17px;
+    }
     .bg-photo .bg-fill{
       object-position:50% 28%;
       opacity:.76;
@@ -295,6 +317,35 @@
     .bg-photo .bg-main{
       object-position:center 70%;
       opacity:.82;
+    }
+  }
+  @media (max-width: 480px){
+    body{
+      padding:10px;
+    }
+    h1{
+      font-size:30px;
+      letter-spacing:.02em;
+    }
+    .start-row{
+      flex-direction:column;
+      align-items:stretch;
+      gap:8px;
+    }
+    .start-row .input,
+    .start-row .btn{
+      width:100%;
+      max-width:none;
+    }
+    .start-row .btn{
+      height:46px;
+    }
+    .muted{
+      font-size:13px;
+      line-height:1.4;
+    }
+    .ime-input{
+      font-size:16px;
     }
   }
 </style>
@@ -338,7 +389,7 @@
         <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
         <div id="playWarn" class="warn hidden"></div>
       </div>
-      <input id="typeInput" class="ime-hidden-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+      <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ここに入力（ひらがな）" />
     </div>
   </section>
 
@@ -452,6 +503,16 @@
   const isMobileLike = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   usePCRealtime = !isMobileLike;
 
+  function syncInputMode(){
+    if (usePCRealtime) {
+      typeInput.classList.add("desktop-hidden");
+      typeInput.removeAttribute("placeholder");
+    } else {
+      typeInput.classList.remove("desktop-hidden");
+      typeInput.setAttribute("placeholder", "ここに入力（ひらがな）");
+    }
+  }
+
   function showScreen(name){
     screenStart.classList.toggle("active", name==="start");
     screenPlay.classList.toggle("active", name==="play");
@@ -560,14 +621,20 @@
     typeInput.disabled = false;
     typeInput.readOnly = false;
     typeInput.setAttribute("inputmode", "text");
-    focusTypingInput();
+    syncInputMode();
+    if (usePCRealtime) {
+      playWarn.classList.add("hidden");
+      return;
+    }
+    playWarn.textContent = "下の入力欄をタップして入力開始";
+    playWarn.classList.remove("hidden");
   }
 
   function focusTypingInput(){
     if (phase !== "play") return;
     typeInput.focus({preventScroll:true});
     playWarn.classList.add("hidden");
-    setTimeout(() => screenPlay.scrollIntoView({block:"center"}), 50);
+    setTimeout(() => typeInput.scrollIntoView({block:"center"}), 50);
   }
 
   function finishPlay(){
@@ -802,6 +869,9 @@
       typeInput.value = "";
       return;
     }
+    if (!usePCRealtime && (e.inputType === "insertCompositionText" || e.inputType === "deleteCompositionText")) {
+      return;
+    }
     if (e.inputType === "insertFromPaste") {
       softReset("貼り付けは無効です。リセットしました。");
       return;
@@ -826,7 +896,7 @@
 
   typeInput.addEventListener("blur", () => {
     if (phase !== "play") return;
-    playWarn.textContent = "入力が外れました。画面をタップして再開してください。";
+    playWarn.textContent = "入力が外れました。入力欄をタップして再開してください。";
     playWarn.classList.remove("hidden");
   });
 
@@ -896,6 +966,7 @@
   }
 
   // Initial render
+  syncInputMode();
   renderKanaWindow();
 })();
 </script>
