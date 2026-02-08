@@ -121,6 +121,9 @@
     padding:8px 12px;
     width:190px;
   }
+  #name::placeholder{
+    color:#9aa5b5;
+  }
   .input:focus{
     outline:none;
     border-color:var(--accent);
@@ -402,7 +405,7 @@
         <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
         <div id="playWarn" class="warn hidden"></div>
       </div>
-      <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ここに入力（ひらがな）" />
+      <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="" />
     </div>
   </section>
 
@@ -515,7 +518,6 @@
   let romajiBuffer = "";
   let usePCRealtime = false;
   let lastRealtimeKeyHandledAt = -1;
-  let mobileHandledLen = 0;
 
   lenEl.textContent = TEXT.length.toString();
   const isMobileLike = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -528,7 +530,7 @@
       typeInput.removeAttribute("placeholder");
     } else {
       typeInput.classList.remove("desktop-hidden");
-      typeInput.setAttribute("placeholder", "ここに入力（ひらがな）");
+      typeInput.setAttribute("placeholder", "");
     }
   }
 
@@ -644,7 +646,6 @@
     syncInputMode();
     playWarn.classList.add("hidden");
     typeInput.value = "";
-    mobileHandledLen = 0;
     focusTypingInput();
   }
 
@@ -747,7 +748,6 @@
     if (!normalized) return;
     processCommittedText(normalized);
     typeInput.value = "";
-    mobileHandledLen = 0;
   }
 
   function convertRomajiBuffer(flush){
@@ -920,6 +920,7 @@
       }
     }
     if (!usePCRealtime) {
+      if (isComposing || e.isComposing) return;
       processMobileDelta();
       return;
     }
@@ -955,10 +956,6 @@
     lastCompositionHandledAt = performance.now();
   });
 
-  typeInput.addEventListener("compositionupdate", () => {
-    if (phase !== "play" || usePCRealtime) return;
-    processMobileDelta();
-  });
 
   typeInput.addEventListener("paste", (e) => {
     e.preventDefault();
