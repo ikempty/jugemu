@@ -744,18 +744,10 @@
 
   function processMobileDelta(){
     const normalized = (typeInput.value || "").normalize("NFC");
-    if (normalized.length < mobileHandledLen) {
-      mobileHandledLen = normalized.length;
-      return;
-    }
-    const delta = normalized.slice(mobileHandledLen);
-    if (!delta) return;
-    processCommittedText(delta);
-    mobileHandledLen = normalized.length;
-    if (mobileHandledLen > 24) {
-      typeInput.value = "";
-      mobileHandledLen = 0;
-    }
+    if (!normalized) return;
+    processCommittedText(normalized);
+    typeInput.value = "";
+    mobileHandledLen = 0;
   }
 
   function convertRomajiBuffer(flush){
@@ -917,15 +909,15 @@
       softReset("貼り付けは無効です。リセットしました。");
       return;
     }
-    if (lastCompositionHandledAt > 0 && performance.now() - lastCompositionHandledAt < 40) {
-      if (usePCRealtime) {
+    if (usePCRealtime) {
+      if (lastCompositionHandledAt > 0 && performance.now() - lastCompositionHandledAt < 40) {
         typeInput.value = "";
+        return;
       }
-      return;
-    }
-    if (lastRealtimeKeyHandledAt > 0 && performance.now() - lastRealtimeKeyHandledAt < 40) {
-      typeInput.value = "";
-      return;
+      if (lastRealtimeKeyHandledAt > 0 && performance.now() - lastRealtimeKeyHandledAt < 40) {
+        typeInput.value = "";
+        return;
+      }
     }
     if (!usePCRealtime) {
       processMobileDelta();
@@ -961,6 +953,11 @@
       typeInput.value = "";
     }
     lastCompositionHandledAt = performance.now();
+  });
+
+  typeInput.addEventListener("compositionupdate", () => {
+    if (phase !== "play" || usePCRealtime) return;
+    processMobileDelta();
   });
 
   typeInput.addEventListener("paste", (e) => {
