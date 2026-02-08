@@ -32,6 +32,14 @@
     padding:18px;
     overflow-x:hidden;
   }
+  body.no-scroll{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100dvh;
+    overflow:hidden;
+    touch-action:none;
+  }
   .bg-photo{
     position:fixed;
     inset:0;
@@ -242,10 +250,10 @@
   }
   .flick-wrap{
     margin-top:10px;
-    background:rgba(255,255,255,.36);
+    background:rgba(255,255,255,.46);
     border:1px solid rgba(255,255,255,.55);
     border-radius:14px;
-    padding:10px;
+    padding:12px;
     box-shadow:0 8px 20px rgba(0,0,0,.08);
   }
   .flick-note{
@@ -254,11 +262,10 @@
     color:#0f172a;
     margin-bottom:6px;
   }
-  .flick-base-row,
-  .flick-opt-row{
-    display:flex;
+  .flick-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
     gap:6px;
-    flex-wrap:wrap;
   }
   .flick-btn{
     border:none;
@@ -271,6 +278,7 @@
     color:white;
     box-shadow:0 6px 14px rgba(229,0,113,.25);
     cursor:pointer;
+    touch-action:none;
   }
   .flick-btn.opt{
     background:rgba(255,255,255,.92);
@@ -457,8 +465,7 @@
       <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="" autofocus />
       <div id="flickArea" class="flick-wrap hidden">
         <div class="flick-note">スマホ向けフリック風キーボード</div>
-        <div id="flickBase" class="flick-base-row"></div>
-        <div id="flickOpts" class="flick-opt-row" style="margin-top:8px"></div>
+        <div id="flickGrid" class="flick-grid"></div>
       </div>
     </div>
   </section>
@@ -555,8 +562,7 @@
   const nextCharEl = el("nextChar");
   const progressBarEl = el("progressBar");
   const flickArea = el("flickArea");
-  const flickBase = el("flickBase");
-  const flickOpts = el("flickOpts");
+  const flickGrid = el("flickGrid");
 
   const finalScoreEl = el("finalScore");
   const timeRawEl = el("timeRaw");
@@ -583,19 +589,25 @@
   usePCRealtime = !(isMobileLike || isCoarsePointer);
 
   const FLICK_KEYS = [
-    {label:"あ", options:["あ","い","う","え","お"]},
-    {label:"か", options:["か","き","く","け","こ","が","ぎ","ぐ","げ","ご"]},
-    {label:"さ", options:["さ","し","す","せ","そ","ざ","じ","ず","ぜ","ぞ"]},
-    {label:"た", options:["た","ち","つ","て","と","だ","ぢ","づ","で","ど","っ"]},
-    {label:"な", options:["な","に","ぬ","ね","の"]},
-    {label:"は", options:["は","ひ","ふ","へ","ほ","ば","び","ぶ","べ","ぼ","ぱ","ぴ","ぷ","ぺ","ぽ"]},
-    {label:"ま", options:["ま","み","む","め","も"]},
-    {label:"や", options:["や","ゆ","よ","ゃ","ゅ","ょ"]},
-    {label:"ら", options:["ら","り","る","れ","ろ"]},
-    {label:"わ", options:["わ","を","ん"]},
-    {label:"ー", options:["ー"]}
+    {label:"あ", base:"あ", left:"い", up:"う", right:"え", down:"お"},
+    {label:"か", base:"か", left:"き", up:"く", right:"け", down:"こ"},
+    {label:"さ", base:"さ", left:"し", up:"す", right:"せ", down:"そ"},
+    {label:"た", base:"た", left:"ち", up:"つ", right:"て", down:"と"},
+    {label:"な", base:"な", left:"に", up:"ぬ", right:"ね", down:"の"},
+    {label:"は", base:"は", left:"ひ", up:"ふ", right:"へ", down:"ほ"},
+    {label:"ま", base:"ま", left:"み", up:"む", right:"め", down:"も"},
+    {label:"や", base:"や", left:"ゃ", up:"ゆ", right:"よ", down:"ゅ"},
+    {label:"ら", base:"ら", left:"り", up:"る", right:"れ", down:"ろ"},
+    {label:"小", action:"small"},
+    {label:"゛", action:"dakuten"},
+    {label:"゜", action:"handaku"},
+    {label:"わ", base:"わ", left:"を", up:"ん", right:"ー", down:"ゎ"},
+    {label:"、", base:"、", left:"。", up:"？", right:"！", down:"・"}
   ];
-  let currentFlickIndex = 0;
+  let pressInfo = null;
+  let pendingSmall = false;
+  let pendingDakuten = false;
+  let pendingHandaku = false;
 
   function syncInputMode(){
     if (usePCRealtime) {
@@ -603,12 +615,14 @@
       typeInput.classList.remove("mobile-hidden");
       typeInput.removeAttribute("placeholder");
       flickArea.classList.add("hidden");
+      document.body.classList.remove("no-scroll");
     } else {
       typeInput.classList.remove("desktop-hidden");
       typeInput.classList.add("mobile-hidden");
       typeInput.setAttribute("placeholder", "");
       renderFlickKeyboard();
       flickArea.classList.remove("hidden");
+      document.body.classList.add("no-scroll");
     }
   }
 
@@ -659,12 +673,8 @@
 
   function renderFlickKeyboard(){
     if (usePCRealtime) return;
-    flickBase.innerHTML = FLICK_KEYS.map((k,i)=>
-      `<button class="flick-btn ${i===currentFlickIndex?"active":""}" data-idx="${i}">${k.label}</button>`
-    ).join("");
-    const opts = FLICK_KEYS[currentFlickIndex].options;
-    flickOpts.innerHTML = opts.map(ch=>
-      `<button class="flick-btn opt" data-ch="${ch}">${ch}</button>`
+    flickGrid.innerHTML = FLICK_KEYS.map((k,i)=>
+      `<button class="flick-btn" data-key="${i}">${k.label}</button>`
     ).join("");
   }
 
@@ -800,6 +810,33 @@
     mistakedPosSet.add(pos);
   }
 
+  function applySmall(ch){
+    const m = {
+      "あ":"ぁ","い":"ぃ","う":"ぅ","え":"ぇ","お":"ぉ",
+      "や":"ゃ","ゆ":"ゅ","よ":"ょ",
+      "つ":"っ","わ":"ゎ"
+    };
+    return m[ch] || ch;
+  }
+
+  function applyDakuten(ch){
+    const m = {
+      "か":"が","き":"ぎ","く":"ぐ","け":"げ","こ":"ご",
+      "さ":"ざ","し":"じ","す":"ず","せ":"ぜ","そ":"ぞ",
+      "た":"だ","ち":"ぢ","つ":"づ","て":"で","と":"ど",
+      "は":"ば","ひ":"び","ふ":"ぶ","へ":"べ","ほ":"ぼ",
+      "う":"ゔ"
+    };
+    return m[ch] || ch;
+  }
+
+  function applyHandaku(ch){
+    const m = {
+      "は":"ぱ","ひ":"ぴ","ふ":"ぷ","へ":"ぺ","ほ":"ぽ"
+    };
+    return m[ch] || ch;
+  }
+
   function hasRomajiPrefix(prefix){
     for (const key of ROMAJI_KEYS){
       if (key.startsWith(prefix)) return true;
@@ -841,6 +878,50 @@
     if (!normalized) return;
     processCommittedText(normalized);
     typeInput.value = "";
+  }
+
+  function emitFlickChar(rawCh){
+    if (!rawCh) return;
+    let ch = rawCh;
+    if (pendingSmall){
+      ch = applySmall(ch);
+      pendingSmall = false;
+    }
+    if (pendingDakuten){
+      ch = applyDakuten(ch);
+      pendingDakuten = false;
+    }
+    if (pendingHandaku){
+      ch = applyHandaku(ch);
+      pendingHandaku = false;
+    }
+    handleChars(ch);
+  }
+
+  function decideChar(key, dir){
+    if (key.action === "small"){
+      pendingSmall = true;
+      pendingDakuten = false;
+      pendingHandaku = false;
+      return null;
+    }
+    if (key.action === "dakuten"){
+      pendingDakuten = true;
+      pendingHandaku = false;
+      return null;
+    }
+    if (key.action === "handaku"){
+      pendingHandaku = true;
+      pendingDakuten = false;
+      return null;
+    }
+    if (!key.base) return null;
+    if (!dir) return key.base;
+    if (dir === "left" && key.left) return key.left;
+    if (dir === "up" && key.up) return key.up;
+    if (dir === "right" && key.right) return key.right;
+    if (dir === "down" && key.down) return key.down;
+    return key.base;
   }
 
   function convertRomajiBuffer(flush){
@@ -1072,18 +1153,68 @@
     softReset("ドロップ入力は無効です。リセットしました。");
   });
 
-  flickBase.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-idx]");
+  function handlePressStart(clientX, clientY, keyIdx){
+    pressInfo = {x:clientX, y:clientY, keyIdx};
+  }
+
+  function handlePressEnd(clientX, clientY, keyIdx){
+    if (pressInfo && pressInfo.keyIdx !== keyIdx){
+      pressInfo = null;
+      return;
+    }
+    const info = pressInfo;
+    pressInfo = null;
+    const key = FLICK_KEYS[keyIdx];
+    if (!key) return;
+    let dir = null;
+    if (info){
+      const dx = clientX - info.x;
+      const dy = clientY - info.y;
+      const threshold = 22;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold){
+        dir = dx > 0 ? "right" : "left";
+      } else if (Math.abs(dy) > threshold){
+        dir = dy > 0 ? "down" : "up";
+      }
+    }
+    const ch = decideChar(key, dir);
+    if (ch) emitFlickChar(ch);
+  }
+
+  flickGrid.addEventListener("touchstart", (e) => {
+    const t = e.changedTouches[0];
+    const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
     if (!btn) return;
-    currentFlickIndex = Number(btn.dataset.idx);
-    renderFlickKeyboard();
+    handlePressStart(t.clientX, t.clientY, Number(btn.dataset.key));
+  }, {passive:true});
+
+  flickGrid.addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0];
+    const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
+    if (!btn) { pressInfo=null; return; }
+    handlePressEnd(t.clientX, t.clientY, Number(btn.dataset.key));
+    e.preventDefault();
+  }, {passive:false});
+
+  flickGrid.addEventListener("mousedown", (e) => {
+    const btn = e.target.closest("button[data-key]");
+    if (!btn) return;
+    handlePressStart(e.clientX, e.clientY, Number(btn.dataset.key));
   });
 
-  flickOpts.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-ch]");
+  flickGrid.addEventListener("mouseup", (e) => {
+    const btn = e.target.closest("button[data-key]");
     if (!btn) return;
-    if (phase !== "play" || usePCRealtime) return;
-    handleChars(btn.dataset.ch);
+    handlePressEnd(e.clientX, e.clientY, Number(btn.dataset.key));
+  });
+
+  flickGrid.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-key]");
+    if (!btn) return;
+    if (pressInfo) return;
+    const key = FLICK_KEYS[Number(btn.dataset.key)];
+    const ch = decideChar(key, null);
+    if (ch) emitFlickChar(ch);
   });
 
   document.addEventListener("visibilitychange", () => {
