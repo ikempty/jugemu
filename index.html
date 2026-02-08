@@ -350,6 +350,9 @@
     flex-direction:column;
     gap:12px;
   }
+  body.no-scroll #screen-play .play-grid{
+    padding-top:calc(env(safe-area-inset-top) + 24px);
+  }
   .play-lines{
     background:rgba(255,255,255,0.30);
     border-radius:14px;
@@ -431,6 +434,9 @@
     .bg-photo .bg-main{
       object-position:center 70%;
       opacity:.82;
+    }
+    body.no-scroll #screen-play .play-grid{
+      padding-top:calc(env(safe-area-inset-top) + 34px);
     }
   }
   @media (max-width: 480px){
@@ -666,11 +672,10 @@
     {label:"？", base:"、", left:"。", up:"？", right:"！", down:"・"}
   ];
   let pressInfo = null;
-  let pendingSmall = false;
-  let pendingDakuten = false;
-  let pendingHandaku = false;
   let previewVisible = false;
   let hintVisible = false;
+  let mistakePosCount = new Map();
+  let lastFlickEntry = null;
 
   function syncInputMode(){
     if (usePCRealtime) {
@@ -810,6 +815,8 @@
     miss = 0;
     penalty = 0;
     mistakedPosSet = new Set();
+    mistakePosCount = new Map();
+    lastFlickEntry = null;
     elapsedEl.textContent = "0.0";
     missEl.textContent = "0";
     posEl.textContent = "0";
@@ -920,12 +927,47 @@
     renderKanaWindow();
   }
 
-  function addMiss(){
-    if (pos >= TEXT.length) return;
+  function addMiss(atPos = pos){
+    if (atPos >= TEXT.length) return;
     miss += 1;
     penalty += 1.0;
     missEl.textContent = miss.toString();
-    mistakedPosSet.add(pos);
+    mistakedPosSet.add(atPos);
+    mistakePosCount.set(atPos, (mistakePosCount.get(atPos) || 0) + 1);
+  }
+
+  function revertMiss(atPos){
+    if (miss > 0) miss -= 1;
+    if (penalty > 0) penalty -= 1.0;
+    missEl.textContent = miss.toString();
+    const nextCount = (mistakePosCount.get(atPos) || 0) - 1;
+    if (nextCount <= 0){
+      mistakePosCount.delete(atPos);
+      mistakedPosSet.delete(atPos);
+    } else {
+      mistakePosCount.set(atPos, nextCount);
+    }
+  }
+
+  function applyFlickAttempt(ch){
+    if (!ch || !isHiraganaOrLong(ch) || phase !== "play") return null;
+    if (pos >= TEXT.length) return null;
+
+    const posBefore = pos;
+    let wasCorrect = false;
+    if (isKanaMatch(ch, TEXT[pos])){
+      wasCorrect = true;
+      pos += 1;
+      posEl.textContent = pos.toString();
+      renderKanaWindow();
+      if (pos >= TEXT.length){
+        finishPlay();
+      }
+      return {posBefore, ch, wasCorrect, ts: performance.now()};
+    }
+    addMiss(posBefore);
+    renderKanaWindow();
+    return {posBefore, ch, wasCorrect, ts: performance.now()};
   }
 
   function applySmall(ch){
@@ -998,22 +1040,35 @@
     typeInput.value = "";
   }
 
-  function emitFlickChar(rawCh){
-    if (!rawCh) return;
-    let ch = rawCh;
-    if (pendingSmall){
-      ch = applySmall(ch);
-      pendingSmall = false;
+  function emitFlickChar(ch){
+    const entry = applyFlickAttempt(ch);
+    if (entry) lastFlickEntry = entry;
+  }
+
+  function applyModifierToChar(ch, modType){
+    if (modType === "dakuten") return applyDakuten(ch);
+    if (modType === "handaku") return applyHandaku(ch);
+    if (modType === "small") return applySmall(ch);
+    return ch;
+  }
+
+  function applyModifierToLast(modType){
+    if (!lastFlickEntry || phase !== "play") return;
+    const prev = lastFlickEntry;
+    if (performance.now() - prev.ts > 1500) return;
+
+    const converted = applyModifierToChar(prev.ch, modType);
+    if (!converted || converted === prev.ch) return;
+
+    if (prev.wasCorrect){
+      pos = prev.posBefore;
+      posEl.textContent = pos.toString();
+    } else {
+      revertMiss(prev.posBefore);
     }
-    if (pendingDakuten){
-      ch = applyDakuten(ch);
-      pendingDakuten = false;
-    }
-    if (pendingHandaku){
-      ch = applyHandaku(ch);
-      pendingHandaku = false;
-    }
-    handleChars(ch);
+
+    const next = applyFlickAttempt(converted);
+    if (next) lastFlickEntry = next;
   }
 
   function previewFlickChar(key, dir){
@@ -1034,18 +1089,12 @@
 
   function commitFlick(key, dir){
     if (key.action === "cycle"){
-      if (!dir || dir === "left"){
-        pendingDakuten = true;
-        pendingHandaku = false;
-        pendingSmall = false;
+      if (!dir || dir === "left" || dir === "up"){
+        applyModifierToLast("dakuten");
       } else if (dir === "right"){
-        pendingHandaku = true;
-        pendingDakuten = false;
-        pendingSmall = false;
+        applyModifierToLast("handaku");
       } else if (dir === "down"){
-        pendingSmall = true;
-        pendingDakuten = false;
-        pendingHandaku = false;
+        applyModifierToLast("small");
       }
       return null;
     }
