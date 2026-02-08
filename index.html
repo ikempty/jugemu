@@ -115,6 +115,12 @@
     width:220px;
     background:rgba(255,255,255,.62);
   }
+  #name{
+    font-size:15px;
+    height:40px;
+    padding:8px 12px;
+    width:190px;
+  }
   .input:focus{
     outline:none;
     border-color:var(--accent);
@@ -164,8 +170,8 @@
     gap:10px;
   }
   .start-row .input{
-    flex:0 1 220px;
-    max-width:220px;
+    flex:0 1 190px;
+    max-width:190px;
   }
   .start-row .btn{
     height:42px;
@@ -336,6 +342,10 @@
     .start-row .btn{
       width:100%;
       max-width:none;
+    }
+    #name{
+      height:42px;
+      width:100%;
     }
     .start-row .btn{
       height:46px;
@@ -860,6 +870,8 @@
     }
     if (!usePCRealtime && e.inputType === "insertLineBreak") {
       e.preventDefault();
+      typeInput.value = "";
+      mobileHandledLen = 0;
     }
   });
 
@@ -901,9 +913,6 @@
       typeInput.value = "";
       return;
     }
-    if (!usePCRealtime && (e.inputType === "insertCompositionText" || e.inputType === "deleteCompositionText")) {
-      return;
-    }
     if (e.inputType === "insertFromPaste") {
       softReset("貼り付けは無効です。リセットしました。");
       return;
@@ -919,7 +928,6 @@
       return;
     }
     if (!usePCRealtime) {
-      if (isComposing || e.isComposing) return;
       processMobileDelta();
       return;
     }
