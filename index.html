@@ -229,6 +229,9 @@
     margin:0;
     padding:0;
   }
+  .ime-input.mobile-hidden{
+    display:none;
+  }
   .warn{
     color:#b45309;
     background:rgba(255,247,237,.92);
@@ -236,6 +239,49 @@
     padding:8px 10px;
     border-radius:10px;
     margin-top:8px;
+  }
+  .flick-wrap{
+    margin-top:10px;
+    background:rgba(255,255,255,.36);
+    border:1px solid rgba(255,255,255,.55);
+    border-radius:14px;
+    padding:10px;
+    box-shadow:0 8px 20px rgba(0,0,0,.08);
+  }
+  .flick-note{
+    font-size:12px;
+    font-weight:800;
+    color:#0f172a;
+    margin-bottom:6px;
+  }
+  .flick-base-row,
+  .flick-opt-row{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .flick-btn{
+    border:none;
+    border-radius:10px;
+    padding:10px 12px;
+    min-width:54px;
+    font-size:17px;
+    font-weight:800;
+    background:linear-gradient(135deg, rgba(255,127,0,.92), rgba(229,0,113,.92));
+    color:white;
+    box-shadow:0 6px 14px rgba(229,0,113,.25);
+    cursor:pointer;
+  }
+  .flick-btn.opt{
+    background:rgba(255,255,255,.92);
+    color:#0f172a;
+    border:1px solid rgba(229,0,113,.24);
+    box-shadow:none;
+    min-width:46px;
+    padding:8px 10px;
+  }
+  .flick-btn.active{
+    outline:3px solid rgba(3,115,138,.4);
   }
   .result-score{
     font-size:46px; font-weight:900; color:var(--accent);
@@ -379,6 +425,9 @@
         <input id="name" class="input" maxlength="12" placeholder="なまえ" aria-label="なまえ" />
         <button id="startBtn" class="btn">Start</button>
       </div>
+      <div class="muted" style="margin-top:6px; font-size:13px; font-weight:700">
+        スマホ・タブレットはフリック専用キーボードで遊びます（OSキーボード不要）。
+      </div>
       <div class="muted" style="margin-top:10px; font-size:14px">
         ルール：1文字ずつ正解で進みます。ミスごとに +1.0秒。貼り付けは禁止（無効）。
       </div>
@@ -406,6 +455,11 @@
         <div id="playWarn" class="warn hidden"></div>
       </div>
       <input id="typeInput" class="ime-input" inputmode="text" lang="ja" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="" autofocus />
+      <div id="flickArea" class="flick-wrap hidden">
+        <div class="flick-note">スマホ向けフリック風キーボード</div>
+        <div id="flickBase" class="flick-base-row"></div>
+        <div id="flickOpts" class="flick-opt-row" style="margin-top:8px"></div>
+      </div>
     </div>
   </section>
 
@@ -500,6 +554,9 @@
   const progressPctEl = el("progressPct");
   const nextCharEl = el("nextChar");
   const progressBarEl = el("progressBar");
+  const flickArea = el("flickArea");
+  const flickBase = el("flickBase");
+  const flickOpts = el("flickOpts");
 
   const finalScoreEl = el("finalScore");
   const timeRawEl = el("timeRaw");
@@ -525,13 +582,33 @@
   const isCoarsePointer = window.matchMedia("(pointer:coarse)").matches;
   usePCRealtime = !(isMobileLike || isCoarsePointer);
 
+  const FLICK_KEYS = [
+    {label:"あ", options:["あ","い","う","え","お"]},
+    {label:"か", options:["か","き","く","け","こ","が","ぎ","ぐ","げ","ご"]},
+    {label:"さ", options:["さ","し","す","せ","そ","ざ","じ","ず","ぜ","ぞ"]},
+    {label:"た", options:["た","ち","つ","て","と","だ","ぢ","づ","で","ど","っ"]},
+    {label:"な", options:["な","に","ぬ","ね","の"]},
+    {label:"は", options:["は","ひ","ふ","へ","ほ","ば","び","ぶ","べ","ぼ","ぱ","ぴ","ぷ","ぺ","ぽ"]},
+    {label:"ま", options:["ま","み","む","め","も"]},
+    {label:"や", options:["や","ゆ","よ","ゃ","ゅ","ょ"]},
+    {label:"ら", options:["ら","り","る","れ","ろ"]},
+    {label:"わ", options:["わ","を","ん"]},
+    {label:"ー", options:["ー"]}
+  ];
+  let currentFlickIndex = 0;
+
   function syncInputMode(){
     if (usePCRealtime) {
       typeInput.classList.add("desktop-hidden");
+      typeInput.classList.remove("mobile-hidden");
       typeInput.removeAttribute("placeholder");
+      flickArea.classList.add("hidden");
     } else {
       typeInput.classList.remove("desktop-hidden");
+      typeInput.classList.add("mobile-hidden");
       typeInput.setAttribute("placeholder", "");
+      renderFlickKeyboard();
+      flickArea.classList.remove("hidden");
     }
   }
 
@@ -578,6 +655,17 @@
     progressPctEl.textContent = (ratio * 100).toFixed(1);
     progressBarEl.style.width = `${(ratio * 100).toFixed(1)}%`;
     nextCharEl.textContent = pos < TEXT.length ? TEXT[pos] : "完了";
+  }
+
+  function renderFlickKeyboard(){
+    if (usePCRealtime) return;
+    flickBase.innerHTML = FLICK_KEYS.map((k,i)=>
+      `<button class="flick-btn ${i===currentFlickIndex?"active":""}" data-idx="${i}">${k.label}</button>`
+    ).join("");
+    const opts = FLICK_KEYS[currentFlickIndex].options;
+    flickOpts.innerHTML = opts.map(ch=>
+      `<button class="flick-btn opt" data-ch="${ch}">${ch}</button>`
+    ).join("");
   }
 
   function renderResultKana(){
@@ -652,9 +740,13 @@
 
   function focusTypingInput(){
     if (phase !== "play") return;
-    typeInput.focus({preventScroll:true});
-    playWarn.classList.add("hidden");
-    setTimeout(() => typeInput.scrollIntoView({block:"center"}), 50);
+    if (usePCRealtime){
+      typeInput.focus({preventScroll:true});
+      playWarn.classList.add("hidden");
+      setTimeout(() => typeInput.scrollIntoView({block:"center"}), 50);
+    } else {
+      typeInput.blur();
+    }
   }
 
   function finishPlay(){
@@ -936,6 +1028,7 @@
 
   typeInput.addEventListener("blur", () => {
     if (phase !== "play") return;
+    if (!usePCRealtime) return;
     playWarn.textContent = "入力が外れました。画面をタップして再開してください。";
     playWarn.classList.remove("hidden");
   });
@@ -977,6 +1070,20 @@
     if (phase !== "play") return;
     e.preventDefault();
     softReset("ドロップ入力は無効です。リセットしました。");
+  });
+
+  flickBase.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-idx]");
+    if (!btn) return;
+    currentFlickIndex = Number(btn.dataset.idx);
+    renderFlickKeyboard();
+  });
+
+  flickOpts.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-ch]");
+    if (!btn) return;
+    if (phase !== "play" || usePCRealtime) return;
+    handleChars(btn.dataset.ch);
   });
 
   document.addEventListener("visibilitychange", () => {
