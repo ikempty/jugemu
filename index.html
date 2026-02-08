@@ -614,14 +614,12 @@
       typeInput.classList.remove("mobile-hidden");
       typeInput.removeAttribute("placeholder");
       flickArea.classList.add("hidden");
-      document.body.classList.remove("no-scroll");
     } else {
       typeInput.classList.remove("desktop-hidden");
       typeInput.classList.add("mobile-hidden");
       typeInput.setAttribute("placeholder", "");
       renderFlickKeyboard();
       flickArea.classList.remove("hidden");
-      document.body.classList.add("no-scroll");
     }
   }
 
@@ -630,6 +628,13 @@
     screenPlay.classList.toggle("active", name==="play");
     screenResult.classList.toggle("active", name==="result");
     phase = name;
+    if (!usePCRealtime){
+      if (name === "play"){
+        document.body.classList.add("no-scroll");
+      } else {
+        document.body.classList.remove("no-scroll");
+      }
+    }
   }
 
   function renderKanaWindow(){
@@ -1180,38 +1185,46 @@
     if (ch) emitFlickChar(ch);
   }
 
+  const getKeyIdx = (target) => {
+    const btn = target.closest("button[data-key]");
+    if (!btn) return null;
+    return Number(btn.dataset.key);
+  };
+
   flickGrid.addEventListener("touchstart", (e) => {
     const t = e.changedTouches[0];
-    const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
-    if (!btn) return;
-    handlePressStart(t.clientX, t.clientY, Number(btn.dataset.key));
+    const keyIdx = getKeyIdx(e.target);
+    if (keyIdx === null) return;
+    handlePressStart(t.clientX, t.clientY, keyIdx);
   }, {passive:true});
 
   flickGrid.addEventListener("touchend", (e) => {
     const t = e.changedTouches[0];
-    const btn = document.elementFromPoint(t.clientX, t.clientY)?.closest("button[data-key]");
-    if (!btn) { pressInfo=null; return; }
-    handlePressEnd(t.clientX, t.clientY, Number(btn.dataset.key));
+    const keyIdx = getKeyIdx(e.target);
+    if (keyIdx === null) { pressInfo=null; return; }
+    handlePressEnd(t.clientX, t.clientY, keyIdx);
     e.preventDefault();
   }, {passive:false});
 
-  flickGrid.addEventListener("mousedown", (e) => {
-    const btn = e.target.closest("button[data-key]");
-    if (!btn) return;
-    handlePressStart(e.clientX, e.clientY, Number(btn.dataset.key));
+  flickGrid.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch") return;
+    const keyIdx = getKeyIdx(e.target);
+    if (keyIdx === null) return;
+    handlePressStart(e.clientX, e.clientY, keyIdx);
   });
 
-  flickGrid.addEventListener("mouseup", (e) => {
-    const btn = e.target.closest("button[data-key]");
-    if (!btn) return;
-    handlePressEnd(e.clientX, e.clientY, Number(btn.dataset.key));
+  flickGrid.addEventListener("pointerup", (e) => {
+    if (e.pointerType === "touch") return;
+    const keyIdx = getKeyIdx(e.target);
+    if (keyIdx === null) return;
+    handlePressEnd(e.clientX, e.clientY, keyIdx);
   });
 
   flickGrid.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-key]");
-    if (!btn) return;
+    const keyIdx = getKeyIdx(e.target);
+    if (keyIdx === null) return;
     if (pressInfo) return;
-    const key = FLICK_KEYS[Number(btn.dataset.key)];
+    const key = FLICK_KEYS[keyIdx];
     const ch = decideChar(key, null);
     if (ch) emitFlickChar(ch);
   });
